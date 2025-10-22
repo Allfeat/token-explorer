@@ -1,0 +1,204 @@
+#[cfg(feature = "ssr")]
+use std::str::FromStr;
+
+#[cfg(feature = "ssr")]
+use futures::future::try_join_all;
+
+use leptos::prelude::*;
+use leptos::server;
+
+use serde::Deserialize;
+use serde::Serialize;
+
+#[cfg(feature = "ssr")]
+use crate::substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId;
+#[cfg(feature = "ssr")]
+use substrate::get_alloc_config_of;
+#[cfg(feature = "ssr")]
+use subxt::utils::AccountId32;
+
+#[cfg(feature = "ssr")]
+mod substrate;
+
+pub mod components;
+pub mod utils;
+
+pub mod app;
+mod pages;
+
+#[cfg(feature = "hydrate")]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn hydrate() {
+    use crate::app::*;
+    console_error_panic_hook::set_once();
+    leptos::mount::hydrate_body(App);
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Balances {
+    pub free: u128,
+    pub reserved: u128,
+    pub frozen: u128,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EnvelopeAllocation {
+    pub id: String,
+    pub name: String,
+    pub total_cap: u128,
+    pub upfront_rate: u8,
+    pub cliff: u32,
+    pub vesting_duration: u32,
+    pub unique_beneficiary: Option<String>,
+    pub distributed: u128,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Allocation {
+    pub envelope: EnvelopeAllocation,
+    pub total: u128,
+    pub upfront: u128,
+    pub vested_total: u128,
+    pub released: u128,
+    pub start: u32,
+}
+
+#[server]
+pub async fn get_allocations() -> Result<Vec<EnvelopeAllocation>, ServerFnError> {
+    let chain_api = substrate::chain_api().await;
+
+    // FIXME: https://github.com/paritytech/subxt/issues/1743 not using an iter on storage
+    // cause of this
+    let v = vec![
+        get_alloc_config_of(chain_api, &EnvelopeId::Airdrop, "Airdrop").await?,
+        get_alloc_config_of(
+            chain_api,
+            &EnvelopeId::CommunityRewards,
+            "Community Rewards",
+        )
+        .await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::Private1, "Private Funding #1").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::Private2, "Private Funding #2").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::Seed, "Seed Funding").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::SerieA, "Serie A Funding").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::ICO1, "ICO #1").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::ICO2, "ICO #2").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::Founders, "Founders").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::Reserve, "Reserve").await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::Exchanges, "Exchanges (CEX/DEX)").await?,
+        get_alloc_config_of(
+            chain_api,
+            &EnvelopeId::ResearchDevelopment,
+            "Research & Development",
+        )
+        .await?,
+        get_alloc_config_of(chain_api, &EnvelopeId::KoL, "KoL Funding").await?,
+    ];
+
+    Ok(v)
+}
+
+#[server]
+pub async fn get_epoch_duration() -> Result<u32, ServerFnError> {
+    let chain_api = substrate::chain_api().await;
+
+    let query = substrate::allfeat::constants()
+        .token_allocation()
+        .epoch_duration();
+
+    Ok(chain_api.constants().at(&query)?)
+}
+
+#[server]
+pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnError> {
+    let chain_api = substrate::chain_api().await;
+
+    let query = substrate::allfeat::storage()
+        .token_allocation()
+        .allocations_of(AccountId32::from_str(&id).expect("Valid address"));
+
+    let allocs = chain_api
+        .storage()
+        .at_latest()
+        .await?
+        .fetch(&query)
+        .await?
+        .unwrap()
+        .0;
+
+    let allocs = try_join_all(allocs.iter().map(|alloc| async move {
+        let envelope_cfg = get_alloc_config_of(
+            chain_api,
+            &alloc.envelope,
+            substrate::envelope_to_str(&alloc.envelope),
+        )
+        .await?;
+
+        Ok::<Allocation, ServerFnError>(Allocation {
+            envelope: envelope_cfg,
+            total: alloc.total,
+            released: alloc.released,
+            upfront: alloc.upfront,
+            vested_total: alloc.vested_total,
+            start: alloc.start,
+        })
+    }))
+    .await
+    .unwrap();
+
+    Ok(allocs)
+}
+
+#[server]
+pub async fn get_total_issuance() -> Result<u128, ServerFnError> {
+    let chain_api = substrate::chain_api().await;
+    let query = substrate::allfeat::storage().balances().total_issuance();
+
+    Ok(chain_api
+        .storage()
+        .at_latest()
+        .await?
+        .fetch(&query)
+        .await?
+        .unwrap())
+}
+
+#[server]
+pub async fn get_circulating_supply() -> Result<u128, ServerFnError> {
+    let chain_api = substrate::chain_api().await;
+    let inactive_query = substrate::allfeat::storage().balances().inactive_issuance();
+
+    let inactive_issuance = chain_api
+        .storage()
+        .at_latest()
+        .await?
+        .fetch(&inactive_query)
+        .await?
+        .unwrap();
+
+    let total_issuance = get_total_issuance().await?;
+
+    Ok(total_issuance.saturating_sub(inactive_issuance))
+}
+
+#[server]
+pub async fn get_balance_of(id: String) -> Result<Balances, ServerFnError> {
+    let chain_api = substrate::chain_api().await;
+    let query = substrate::allfeat::storage()
+        .system()
+        .account(AccountId32::from_str(&id).expect("Valid address"));
+
+    let account_info = chain_api
+        .storage()
+        .at_latest()
+        .await?
+        .fetch(&query)
+        .await?
+        .unwrap();
+
+    Ok(Balances {
+        free: account_info.data.free,
+        reserved: account_info.data.reserved,
+        frozen: account_info.data.frozen,
+    })
+}
