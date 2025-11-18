@@ -1,9 +1,6 @@
 #[cfg(feature = "ssr")]
 use std::str::FromStr;
 
-#[cfg(feature = "ssr")]
-use futures::future::try_join_all;
-
 use leptos::prelude::*;
 use leptos::server;
 
@@ -115,36 +112,29 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
 
     let query = substrate::allfeat::storage()
         .token_allocation()
-        .allocations_of(AccountId32::from_str(&id).expect("Valid address"));
+        .allocations_iter();
 
-    let allocs = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .fetch(&query)
-        .await?
-        .unwrap()
-        .0;
+    let mut allocs_iter = chain_api.storage().at_latest().await?.iter(query).await?;
 
-    let allocs = try_join_all(allocs.iter().map(|alloc| async move {
-        let envelope_cfg = get_alloc_config_of(
-            chain_api,
-            &alloc.envelope,
-            substrate::envelope_to_str(&alloc.envelope),
-        )
-        .await?;
+    let mut allocs: Vec<Allocation> = vec![];
 
-        Ok::<Allocation, ServerFnError>(Allocation {
-            envelope: envelope_cfg,
-            total: alloc.total,
-            released: alloc.released,
-            upfront: alloc.upfront,
-            vested_total: alloc.vested_total,
-            start: alloc.start,
-        })
-    }))
-    .await
-    .unwrap();
+    while let Some(Ok(kv)) = allocs_iter.next().await {
+        if kv.value.beneficiary.to_string() == id {
+            allocs.push(Allocation {
+                envelope: get_alloc_config_of(
+                    chain_api,
+                    &kv.value.envelope,
+                    substrate::envelope_to_str(&kv.value.envelope),
+                )
+                .await?,
+                total: kv.value.total,
+                upfront: kv.value.upfront,
+                released: kv.value.released,
+                vested_total: kv.value.vested_total,
+                start: kv.value.start,
+            });
+        }
+    }
 
     Ok(allocs)
 }

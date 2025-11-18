@@ -1,13 +1,16 @@
+use std::sync::Arc;
+
 use leptos::{logging::log, prelude::ServerFnError};
 use subxt::{
-    lightclient::{ChainConfig, LightClient},
     OnlineClient, SubstrateConfig,
+    backend::chain_head::{ChainHeadBackend, ChainHeadBackendBuilder},
+    lightclient::{ChainConfig, LightClient},
 };
 
 use tokio::sync::OnceCell;
 
 use crate::{
-    substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId, EnvelopeAllocation,
+    EnvelopeAllocation, substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId,
 };
 
 // Generate an interface that we can use from the node's metadata.
@@ -17,7 +20,7 @@ use crate::{
 )]
 pub mod allfeat {}
 
-const ALLFEAT_SPEC: &str = include_str!("../allfeat_dev.json");
+const ALLFEAT_SPEC: &str = include_str!("../allfeat.json");
 
 static CHAIN_API: OnceCell<OnlineClient<SubstrateConfig>> = OnceCell::const_new();
 
@@ -34,8 +37,10 @@ pub async fn start_lightclient() -> Result<OnlineClient<SubstrateConfig>, Box<dy
     let chain_config = ChainConfig::chain_spec(ALLFEAT_SPEC);
 
     // Start the light client up, establishing a connection to the local node.
-    let (_light_client, chain_rpc) = LightClient::relay_chain(chain_config)?;
-    let api = OnlineClient::<SubstrateConfig>::from_rpc_client(chain_rpc).await?;
+    let (_, chain_rpc) = LightClient::relay_chain(chain_config)?;
+    let backend: ChainHeadBackend<SubstrateConfig> =
+        ChainHeadBackendBuilder::default().build_with_background_driver(chain_rpc.clone());
+    let api = OnlineClient::<SubstrateConfig>::from_backend(Arc::new(backend)).await?;
 
     log!("Allfeat lightclient initialized.");
 
