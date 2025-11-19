@@ -1,101 +1,85 @@
-use leptos::prelude::*;
-
 use crate::{
-    components::{fetchable_balance::FetchableData, Card},
+    components::{Card, fetchable_balance::FetchableData},
     get_balance_of,
     utils::format_balance,
 };
+use leptos::prelude::*;
 
 #[component]
 pub fn AccountBalances(id: String) -> impl IntoView {
     let balance = OnceResource::new(get_balance_of(id));
 
     view! {
-                    <div class="grid items-start gap-5 sm:gap-6 lg:grid-cols-12">
+        <section>
+             <div class="flex items-center gap-2 mb-6">
+                <div class="h-1 w-1 rounded-full bg-emerald-500"></div>
+                <h2 class="text-sm font-mono uppercase tracking-wider text-neutral-400">
+                    "Balances"
+                </h2>
+            </div>
 
-      <Card
-        padded=false
-        class="lg:col-span-6 xl:col-span-7 relative overflow-hidden"
-        header=view!{
-          <div class="flex items-center justify-between p-5 sm:p-6">
-            <div class="text-xs sm:text-sm uppercase tracking-wider text-neutral-400">"Transferable"</div>
-            <span class="h-2 w-2 rounded-full bg-emerald-400/70"></span>
-          </div>
-        }.into_any()
-      >
-        <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
-          <div class="absolute -left-16 -bottom-16 h-44 w-44 rounded-full
-                  bg-[radial-gradient(closest-side,rgba(16,185,129,0.18),transparent_70%)]
-                  blur-2xl"/>
-        </div>
+            <div class="grid gap-6 lg:grid-cols-3">
 
-        <div class="p-5 sm:p-6">
-          <FetchableData data=balance render=move |value| {
-            view! {
-              <div class="flex flex-col gap-2">
-                <div class="text-3xl sm:text-4xl font-extrabold leading-none text-neutral-50">
-                  { format_balance(value.free, true) }
+                // --- 1. TRANSFERABLE (Hero Card) ---
+                <Card class="lg:col-span-2 relative overflow-hidden border-emerald-500/20">
+                    <div class="absolute top-0 right-0 -mt-4 -mr-4 h-32 w-32 rounded-full bg-emerald-500/10 blur-3xl"></div>
+
+                    <div class="flex flex-col h-full justify-between gap-6">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm font-medium text-neutral-400 uppercase tracking-wider">"Transferable"</span>
+                            <span class="flex h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]"></span>
+                        </div>
+
+                        <FetchableData data=balance render=move |value| {
+                            view! {
+                                <div>
+                                    <div class="text-4xl sm:text-5xl font-mono font-bold text-white tracking-tight">
+                                        { format_balance(value.free, true) }
+                                    </div>
+                                    <p class="mt-2 text-sm text-neutral-500">
+                                        "Available for transfers and transaction fees."
+                                    </p>
+                                </div>
+                            }.into_any()
+                        } />
+                    </div>
+                </Card>
+
+                // --- 2. LOCKED & FROZEN (Stacked or Grid) ---
+                <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-1">
+                    // Locked
+                    <Card class="">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-xs font-medium text-neutral-500 uppercase tracking-wider">"Locked"</span>
+                            // Icon Lock
+                            <svg class="text-rose-500/50 w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        </div>
+                         <FetchableData data=balance render=move |value| {
+                            view! {
+                                <div class="text-2xl font-mono font-bold text-white">
+                                    { format_balance(value.reserved, true) }
+                                </div>
+                            }.into_any()
+                        } />
+                    </Card>
+
+                    // Frozen
+                    <Card class="">
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-xs font-medium text-neutral-500 uppercase tracking-wider">"Frozen"</span>
+                            // Icon Snowflake
+                            <svg class="text-amber-500/50 w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"></line><line x1="12" y1="22" x2="20" y2="16"></line><line x1="12" y1="22" x2="4" y2="16"></line><line x1="12" y1="2" x2="20" y2="8"></line><line x1="12" y1="2" x2="4" y2="8"></line><line x1="20" y1="16" x2="20" y2="8"></line><line x1="4" y1="16" x2="4" y2="8"></line></svg>
+                        </div>
+                         <FetchableData data=balance render=move |value| {
+                            view! {
+                                <div class="text-2xl font-mono font-bold text-white">
+                                    { format_balance(value.frozen, true) }
+                                </div>
+                            }.into_any()
+                        } />
+                    </Card>
                 </div>
-                <p class="text-sm text-neutral-400">"Spendable without restrictions."</p>
-              </div>
-            }.into_any()
-          } />
-        </div>
-      </Card>
-
-      <Card
-        padded=false
-        class="lg:col-span-3 xl:col-span-3 relative overflow-hidden"
-        header=view!{
-          <div class="flex items-center justify-between p-5 sm:p-6">
-            <div class="text-xs sm:text-sm uppercase tracking-wider text-neutral-400">"Locked"</div>
-            <span class="h-2 w-2 rounded-full bg-rose-400/70"></span>
-          </div>
-        }.into_any()
-      >
-        <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
-          <div class="absolute -right-14 -bottom-14 h-36 w-36 rounded-full
-                  bg-[radial-gradient(closest-side,rgba(244,63,94,0.14),transparent_70%)]
-                  blur-2xl"/>
-        </div>
-
-        <div class="p-5 sm:p-6">
-          <FetchableData data=balance render=move |value| {
-            view! {
-              <div class="text-2xl sm:text-3xl font-semibold text-neutral-50">
-                { format_balance(value.reserved, true) }
-              </div>
-            }.into_any()
-          } />
-        </div>
-      </Card>
-
-      <Card
-        padded=false
-        class="lg:col-span-3 xl:col-span-2 relative overflow-hidden"
-        header=view!{
-          <div class="flex items-center justify-between p-5 sm:p-6">
-            <div class="text-xs sm:text-sm uppercase tracking-wider text-neutral-400">"Frozen"</div>
-            <span class="h-2 w-2 rounded-full bg-amber-400/80"></span>
-          </div>
-        }.into_any()
-      >
-        <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
-          <div class="absolute -right-12 -bottom-12 h-32 w-32 rounded-full
-                  bg-[radial-gradient(closest-side,rgba(251,191,36,0.12),transparent_70%)]
-                  blur-2xl"/>
-        </div>
-
-        <div class="p-5 sm:p-6">
-          <FetchableData data=balance render=move |value| {
-            view! {
-              <div class="text-2xl sm:text-3xl font-semibold text-neutral-50">
-                { format_balance(value.frozen, true) }
-              </div>
-            }.into_any()
-          } />
-        </div>
-      </Card>
-    </div>
+            </div>
+        </section>
     }
 }

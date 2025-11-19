@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_navigate;
+use web_sys::SubmitEvent;
 
 use crate::components::metrics_cards::{CirculatingSupply, TotalIssuance, TreasuryBalance};
 
@@ -8,80 +9,104 @@ pub fn Overview() -> impl IntoView {
     let navigate = use_navigate();
     let address = RwSignal::new(String::new());
 
-    let on_submit = move |ev: leptos::ev::SubmitEvent| {
+    // Handler logic separated for clarity
+    let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
         let addr = address.get().trim().to_string();
+
+        // Basic validation could be expanded here (e.g., check length or prefix)
         if !addr.is_empty() {
             navigate(&format!("/accounts/{}", addr), Default::default());
         }
     };
 
     view! {
-        <section class="relative overflow-hidden p-6 sm:pt-10 pb-8 sm:pb-12 mb-10 sm:mb-14">
-            <div aria-hidden="true" class="pointer-events-none absolute inset-0 -z-10">
-                <div class="absolute left-1/2 top-[-30%] h-[640px] w-[640px] -translate-x-1/2
-                            bg-[radial-gradient(closest-side,rgba(16,185,129,0.14),rgba(16,185,129,0)_70%)]
-                            blur-3xl [mask-image:radial-gradient(closest-side,black,transparent_70%)]"></div>
-                <div class="absolute right-[-20%] bottom-[-25%] h-[520px] w-[520px]
-                            bg-[radial-gradient(closest-side,rgba(124,58,237,0.10),transparent_70%)]
-                            blur-3xl [mask-image:radial-gradient(closest-side,black,transparent_70%)]"></div>
-            </div>
+        // Container with spacing to separate Hero from Data
+        <div class="flex flex-col gap-12 sm:gap-16">
 
-            <div class="relative flex flex-col gap-5">
-                <h1 class="text-4xl sm:text-5xl font-extrabold leading-tight text-neutral-50">
-                    "Allfeat Economy Explorer"
+            // --- HERO SECTION ---
+            <section class="relative flex flex-col items-center text-center pt-4 sm:pt-8">
+
+                // Title with Gradient Text Effect
+                <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight">
+                    <span class="bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">
+                        "Allfeat Economy"
+                    </span>
+                    <br />
+                    <span class="text-3xl sm:text-5xl text-neutral-500 font-bold mt-2 block">
+                        "Explorer"
+                    </span>
                 </h1>
 
-                <p class="text-base sm:text-lg text-neutral-400 max-w-2xl">
-                    "View key metrics and track the network economy in real time."
+                <p class="mt-6 text-base sm:text-lg text-neutral-400 max-w-xl leading-relaxed">
+                    "Track the heartbeat of the network. Analyze token movements, allocations, and supply metrics in real-time."
                 </p>
 
-                <form class="mt-1 max-w-2xl" on:submit=on_submit>
-                    <div
-                        class="relative rounded-[1.75rem] border border-white/12 bg-white/[0.045]
-                               shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]
-                               px-4 py-2 sm:px-5 sm:py-3 backdrop-blur
-                               focus-within:ring-2 focus-within:ring-emerald-400/25"
-                    >
-                        <input
-                            type="text"
-                            inputmode="text"
-                            autocomplete="off"
-                            autocapitalize="off"
-                            spellcheck="false"
-                            placeholder="Search for an account details…"
-                            class="w-full bg-transparent text-neutral-100 placeholder:text-neutral-500
-                                   outline-none text-sm sm:text-base pr-14 sm:pr-16 pl-2 sm:pl-3"
-                            prop:value=address
-                            on:input=move |ev| address.set(event_target_value(&ev))
-                        />
+                // --- SEARCH MODULE ---
+                <div class="w-full max-w-2xl mt-10 relative group">
+                    // Subtle glow effect behind the search bar on hover/focus
+                    <div class="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 rounded-[2rem] blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
 
-                        <button
-                            type="submit"
-                            class="absolute right-1.5 top-1/2 -translate-y-1/2
-                                   h-9 w-9 sm:h-10 sm:w-10 grid place-items-center rounded-full
-                                   border border-white/18 bg-white/[0.08]
-                                   hover:bg-white/[0.12] active:scale-95 transition
-                                   text-neutral-100"
-                            aria-label="Search"
-                            title="Search"
-                        >
-                            <svg viewBox="0 0 24 24" class="h-4.5 w-4.5" fill="none" stroke="currentColor">
-                                <path d="M5 12h12M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/>
-                            </svg>
-                        </button>
+                    <form on:submit=on_submit class="relative">
+                        <div class="relative flex items-center overflow-hidden rounded-[2rem] border border-white/10 bg-[#0F0F0F] shadow-2xl transition-all focus-within:border-emerald-500/50 focus-within:ring-1 focus-within:ring-emerald-500/20">
+
+                            // Search Icon (Visual cue)
+                            <div class="pl-5 text-neutral-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <path d="m21 21-4.3-4.3"></path>
+                                </svg>
+                            </div>
+
+                            <input
+                                type="text"
+                                autocomplete="off"
+                                spellcheck="false"
+                                placeholder="Search by account address (5Gx...)"
+                                class="h-14 w-full bg-transparent px-4 text-sm sm:text-base text-white placeholder:text-neutral-600 focus:outline-none"
+                                prop:value=address
+                                on:input=move |ev| address.set(event_target_value(&ev))
+                            />
+
+                            // Action Button
+                            <div class="pr-2">
+                                <button
+                                    type="submit"
+                                    class="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-neutral-400 transition-colors hover:bg-emerald-500 hover:text-white active:scale-95"
+                                    aria-label="Search"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M5 12h14"></path>
+                                        <path d="m12 5 7 7-7 7"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+
+                    // Helper text
+                    <div class="mt-3 flex items-center justify-center gap-2 text-xs text-neutral-600">
+                        <span class="rounded border border-white/5 bg-white/5 px-1.5 py-0.5 font-mono text-[10px]">"ENTER"</span>
+                        <span>"to search"</span>
                     </div>
-                    <p class="m-2 text-xs text-neutral-500">
-                        "Enter a valid Allfeat address account, then hit Enter."
-                    </p>
-                </form>
-            </div>
-        </section>
+                </div>
+            </section>
 
-        <section class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            <TotalIssuance />
-            <CirculatingSupply />
-            <TreasuryBalance />
-        </section>
+            // --- METRICS GRID ---
+            <section>
+                <div class="flex items-center gap-2 mb-6">
+                    <div class="h-1 w-1 rounded-full bg-emerald-500"></div>
+                    <h2 class="text-sm font-mono uppercase tracking-wider text-neutral-400">
+                        "Network Overview"
+                    </h2>
+                </div>
+
+                <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    <TotalIssuance />
+                    <CirculatingSupply />
+                    <TreasuryBalance />
+                </div>
+            </section>
+        </div>
     }
 }

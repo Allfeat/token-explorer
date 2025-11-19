@@ -11,34 +11,41 @@ pub mod toast;
 pub fn Card(
     #[prop(optional)] header: Option<AnyView>,
     #[prop(optional)] footer: Option<AnyView>,
-    #[prop(optional)] padded: bool,
+    #[prop(default = true)] padded: bool,
     #[prop(into, optional)] class: String,
     children: Children,
 ) -> impl IntoView {
-    let padding = if padded { "p-6 sm:p-8" } else { "" };
+    let padding_class = if padded { "p-6" } else { "" };
 
     view! {
-    <section class=format!(
-    "relative overflow-hidden rounded-3xl border border-white/10 bg-[#0f1110] shadow-[0_12px_40px_-16px_rgba(0,0,0,0.6)] {}",
-    class
-    )>
-    <div aria-hidden="true" class="pointer-events-none absolute -left-16 -top-16 h-44 w-44 rounded-full bg-[radial-gradient(closest-side,rgba(244,63,94,0.18),rgba(244,63,94,0)_70%)] blur-2xl"></div>
-    <div aria-hidden="true" class="pointer-events-none absolute -right-20 -bottom-20 h-52 w-52 rounded-full bg-[radial-gradient(closest-side,rgba(16,185,129,0.18),rgba(16,185,129,0)_70%)] blur-2xl"></div>
+        <div class=format!(
+            "relative group isolate flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0F0F0F] shadow-lg transition-all hover:border-white/10 hover:shadow-xl {}",
+            class
+        )>
+            // --- 1. Background Effects ---
+
+            <div class="absolute inset-0 -z-10 bg-gradient-to-br from-emerald-500/[0.03] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"></div>
+
+            <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
 
 
-    { header.map(|h| view! {
-    <div class=format!("{} border-b border-white/10", padding)>{h}</div>
-    }) }
+            // --- 2. Content Structure ---
 
+            { header.map(|h| view! {
+                <div class=format!("{} border-b border-white/5 bg-white/[0.01]", padding_class)>
+                    {h}
+                </div>
+            }) }
 
-    <div class=padding>
-    { children() }
-    </div>
+            <div class=format!("flex-1 relative {}", padding_class)>
+                { children() }
+            </div>
 
-
-    { footer.map(|f| view! {
-    <div class=format!("{} border-t border-white/10", padding)>{f}</div>
-    }) }
-    </section>
+            { footer.map(|f| view! {
+                <div class=format!("{} border-t border-white/5 bg-white/[0.01]", padding_class)>
+                    {f}
+                </div>
+            }) }
+        </div>
     }
 }

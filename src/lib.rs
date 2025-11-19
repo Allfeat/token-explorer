@@ -156,19 +156,41 @@ pub async fn get_total_issuance() -> Result<u128, ServerFnError> {
 #[server]
 pub async fn get_circulating_supply() -> Result<u128, ServerFnError> {
     let chain_api = substrate::chain_api().await;
-    let inactive_query = substrate::allfeat::storage().balances().inactive_issuance();
 
-    let inactive_issuance = chain_api
+    let distributed_query = substrate::allfeat::storage()
+        .token_allocation()
+        .envelope_distributed_iter();
+    let allocations_query = substrate::allfeat::storage()
+        .token_allocation()
+        .allocations_iter();
+
+    let mut distributed_iter = chain_api
         .storage()
         .at_latest()
         .await?
-        .fetch(&inactive_query)
+        .iter(distributed_query)
+        .await?;
+
+    let mut total_distributed: u128 = 0;
+    while let Some(Ok(kv)) = distributed_iter.next().await {
+        total_distributed += kv.value
+    }
+
+    let mut allocations_iter = chain_api
+        .storage()
+        .at_latest()
         .await?
-        .unwrap();
+        .iter(allocations_query)
+        .await?;
 
-    let total_issuance = get_total_issuance().await?;
+    let mut total_in_vesting: u128 = 0;
+    while let Some(Ok(kv)) = allocations_iter.next().await {
+        total_in_vesting += kv.value.vested_total.saturating_sub(kv.value.released)
+    }
 
-    Ok(total_issuance.saturating_sub(inactive_issuance))
+    let distributed_less_in_vesting = total_distributed.saturating_sub(total_in_vesting);
+
+    Ok(distributed_less_in_vesting)
 }
 
 #[server]
