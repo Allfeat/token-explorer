@@ -55,6 +55,8 @@ jobs:
   update-infrastructure-repo:
     needs: build-and-push
     runs-on: ubuntu-latest
+    environment: 
+      name: dev
     steps:
       - name: Checkout Infrastructure Repo
         uses: actions/checkout@v4
@@ -74,7 +76,7 @@ jobs:
         run: |
           cd infrastructure/$OVERLAY_PATH
           echo "Updating image to: $NEW_IMAGE"
-          kustomize edit set image ghcr.io/Allfeat/token-explorer=$NEW_IMAGE
+          kustomize edit set image IMAGE_PLACEHOLDER=$NEW_IMAGE
 
       - name: Commit and Push Changes
         run: |
@@ -85,7 +87,7 @@ jobs:
           if [[ -n $(git status -s) ]]; then
             git add .
             git commit -m "ci(dev): deploy version ${{ github.sha }} to dev"
-            git push origin main
+            git push origin master
           else
             echo "No changes to commit"
           fi
