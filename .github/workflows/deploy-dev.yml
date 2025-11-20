@@ -71,7 +71,7 @@ jobs:
 
       - name: Update Image Tag in Dev Overlay
         env:
-          NEW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          NEW_IMAGE: ${{ vars.INFRA_REPO_OWNER }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           OVERLAY_PATH: kubernetes/apps/token-explorer/overlays/dev
         run: |
           cd infrastructure/$OVERLAY_PATH

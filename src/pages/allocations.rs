@@ -1,6 +1,6 @@
 use crate::{
     EnvelopeAllocation,
-    components::{Card, fetchable_balance::FetchableData},
+    components::{Card, fetchable_balance::FetchableData, toast::use_toast},
     get_allocations,
     utils::{blocks_to_human_duration, blocks_to_str, format_balance, ss58_identicon_svg},
 };
@@ -47,6 +47,8 @@ pub fn Allocations() -> impl IntoView {
 
 #[component]
 pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
+    let toast = use_toast();
+
     let upfront_amount = env.total_cap.saturating_mul(env.upfront_rate as u128) / 100u128;
     let total = env.total_cap;
     let distributed = env.distributed.min(total);
@@ -62,6 +64,11 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
     let progress_style = format!("width: {:.2}%;", distributed_pct);
 
     let has_unique = env.unique_beneficiary.is_some();
+
+    let copy_to_clipboard = move |address: &str| {
+        let _ = window().navigator().clipboard().write_text(address);
+        (toast.add_toast)("Address copied to clipboard".to_string());
+    };
 
     view! {
         <Card class="h-full flex flex-col">
@@ -138,25 +145,28 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
                 })}
 
                 // --- 5. UNIQUE BENEFICIARY (Alternative Footer) ---
-                { move || env.unique_beneficiary.as_ref().map(|addr| view! {
+                { move || env.unique_beneficiary.as_ref().map(|addr| {
+                    let full_address: String = addr.clone();
+                    let copy_closure = copy_to_clipboard.clone();
+                                                                         view! {
                      <div class="mt-auto rounded-xl bg-white/[0.03] border border-white/5 p-3">
                         <div class="flex items-center gap-3 overflow-hidden">
                             <div class="h-8 w-8 rounded-full bg-black ring-1 ring-white/10 shrink-0 flex items-center justify-center">
                                 // Icon
-                                <div inner_html=ss58_identicon_svg(addr, 24) class="opacity-80" />
+                                <div inner_html=ss58_identicon_svg(&full_address, 24) class="opacity-80" />
                             </div>
 
                             <div class="flex-1 min-w-0">
                                 <div class="text-[10px] uppercase text-neutral-500 mb-0.5">"Allocated to"</div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs text-neutral-300 font-mono truncate block">
-                                        {addr.clone()}
+                                        {full_address.clone()}
                                     </span>
                                     // Copy Button (Minimalist)
                                     <button
                                         class="text-neutral-500 hover:text-white transition-colors"
                                         title="Copy Address"
-                                        // Ajouter on:click logic ici
+                                        on:click=move |_| copy_closure(&full_address)
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                                     </button>
@@ -164,7 +174,7 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
                             </div>
                         </div>
                     </div>
-                })}
+                }})}
             </div>
         </Card>
     }
