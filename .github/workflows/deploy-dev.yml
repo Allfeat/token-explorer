@@ -8,7 +8,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: allfeat/token-explorer
 
 jobs:
   build-and-push:
@@ -43,14 +43,12 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
   update-infrastructure-repo:
     needs: build-and-push
@@ -71,7 +69,7 @@ jobs:
 
       - name: Update Image Tag in Dev Overlay
         env:
-          NEW_IMAGE: ${{ vars.INFRA_REPO_OWNER }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          NEW_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
           OVERLAY_PATH: kubernetes/apps/token-explorer/overlays/dev
         run: |
           cd infrastructure/$OVERLAY_PATH

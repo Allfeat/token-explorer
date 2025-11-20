@@ -1,4 +1,8 @@
 target/
 .git/
+.direnv/
+.crush/
+.github/
 Dockerfile
 README.md
+CRUSH.md
