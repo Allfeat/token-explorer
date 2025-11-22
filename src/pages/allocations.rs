@@ -11,15 +11,16 @@ pub fn Allocations() -> impl IntoView {
     let allocations = OnceResource::new(get_allocations());
 
     view! {
-        <div class="flex flex-col gap-8 sm:gap-12">
+        <div class="flex flex-col gap-6 sm:gap-12">
+
             // --- HEADER ---
-            <header class="flex flex-col gap-4 pt-4 sm:pt-8">
+            <header class="flex flex-col gap-3 sm:gap-4 pt-2 sm:pt-8">
                 <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight">
                     <span class="bg-gradient-to-b from-white to-white/60 bg-clip-text text-transparent">
                         "Token Sources"
                     </span>
                 </h1>
-                <p class="text-neutral-400 max-w-2xl leading-relaxed text-base">
+                <p class="text-neutral-400 max-w-2xl leading-relaxed text-sm sm:text-base">
                     "Detailed breakdown of network emission sources. Track vesting schedules, cliffs, and real-time distribution progress for each envelope."
                 </p>
             </header>
@@ -29,7 +30,7 @@ pub fn Allocations() -> impl IntoView {
                 data=allocations
                 render={move |items: Vec<EnvelopeAllocation>| {
                     view! {
-                        <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+                        <div class="grid gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
                             <For
                                 each=move || items.clone()
                                 key=|env| env.id.clone()
@@ -72,22 +73,22 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
 
     view! {
         <Card class="h-full flex flex-col">
-            <div class="flex flex-col h-full gap-6">
+            <div class="flex flex-col h-full gap-5 sm:gap-6">
 
                 // --- 1. TITLE & HEADER ---
-                <div class="flex items-start justify-between gap-4">
-                    <div>
+                <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-500">
                                 "Envelope"
                             </span>
                         </div>
-                        <h3 class="text-lg font-semibold text-white leading-tight">
+                        <h3 class="text-base sm:text-lg font-semibold text-white leading-tight truncate pr-2">
                             { env.name.clone() }
                         </h3>
                     </div>
                     { (env.upfront_rate > 0).then(|| view! {
-                        <div class="rounded-md bg-white/5 px-2 py-1 text-xs font-medium text-neutral-300 border border-white/5" title="Upfront Release">
+                        <div class="shrink-0 rounded-md bg-white/5 px-2 py-1 text-[10px] sm:text-xs font-medium text-neutral-300 border border-white/5" title="Upfront Release">
                             "Upfront " {env.upfront_rate} "%"
                         </div>
                     })}
@@ -95,7 +96,7 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
 
                 // --- 2. PRIMARY KPI (Total Cap) ---
                 <div>
-                    <div class="text-xs text-neutral-500 uppercase tracking-wider mb-1">"Total Allocation"</div>
+                    <div class="text-[10px] sm:text-xs text-neutral-500 uppercase tracking-wider mb-0.5 sm:mb-1">"Total Allocation"</div>
                     <div class="text-2xl sm:text-3xl font-mono font-bold text-white tracking-tight" title=move || format_balance(env.total_cap, true)>
                         { format_balance(env.total_cap, true) }
                     </div>
@@ -105,36 +106,41 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
                 </div>
 
                 // --- 3. VESTING TIMELINE (Grid) ---
-                <div class="grid grid-cols-2 gap-4 py-4 border-y border-dashed border-white/10">
+                <div class="grid grid-cols-2 gap-3 sm:gap-4 py-4 border-y border-dashed border-white/10">
                     // Cliff
                     <div>
                         <div class="text-[10px] uppercase text-neutral-500 mb-0.5">"Cliff Period"</div>
-                        <div class="text-sm font-medium text-neutral-200">{ blocks_to_human_duration(env.cliff) }</div>
-                        <div class="text-[10px] text-neutral-600 font-mono">{ blocks_to_str(env.cliff) } " blocks"</div>
+                        <div class="text-xs sm:text-sm font-medium text-neutral-200 truncate">
+                            { blocks_to_human_duration(env.cliff) }
+                        </div>
+                        <div class="text-[10px] text-neutral-600 font-mono mt-0.5">
+                            { blocks_to_str(env.cliff) } " blocks"
+                        </div>
                     </div>
                     // Vesting
                     <div>
                         <div class="text-[10px] uppercase text-neutral-500 mb-0.5">"Vesting Duration"</div>
-                        <div class="text-sm font-medium text-neutral-200">{ blocks_to_human_duration(env.vesting_duration) }</div>
-                        <div class="text-[10px] text-neutral-600 font-mono">{ blocks_to_str(env.vesting_duration) } " blocks"</div>
+                        <div class="text-xs sm:text-sm font-medium text-neutral-200 truncate">
+                            { blocks_to_human_duration(env.vesting_duration) }
+                        </div>
+                        <div class="text-[10px] text-neutral-600 font-mono mt-0.5">
+                            { blocks_to_str(env.vesting_duration) } " blocks"
+                        </div>
                     </div>
                 </div>
 
                 // --- 4. DISTRIBUTION PROGRESS ---
                 { (!has_unique).then(move || view! {
-                    <div class="space-y-3 mt-auto">
-                        // Labels
+                    <div class="space-y-2 sm:space-y-3 mt-auto">
                         <div class="flex justify-between text-xs">
                             <span class="text-neutral-400">"Distributed"</span>
                             <span class="text-white font-mono">{format!("{:.1}%", distributed_pct)}</span>
                         </div>
 
-                        // Bar
                         <div class="h-1.5 w-full rounded-full bg-white/5 overflow-hidden">
                             <div class="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]" style=progress_style></div>
                         </div>
 
-                        // Details (Remaining)
                         <div class="flex justify-between items-baseline text-xs">
                             <span class="text-neutral-500">"Remaining"</span>
                             <span class="text-neutral-300 font-mono" title=move || format_balance(remaining, true)>

@@ -12,7 +12,7 @@ pub fn AccountAllocations(id: String) -> impl IntoView {
 
     view! {
         <section>
-             <div class="flex items-center gap-2 mb-6">
+             <div class="flex items-center gap-2 mb-4 sm:mb-6">
                 <div class="h-1 w-1 rounded-full bg-emerald-500"></div>
                 <h2 class="text-sm font-mono uppercase tracking-wider text-neutral-400">
                     "Active Allocations"
@@ -22,7 +22,7 @@ pub fn AccountAllocations(id: String) -> impl IntoView {
             <Suspense fallback=move || view! { <AllocationsSkeleton /> }>
                 {move || allocs.get().map(|res| match res {
                     Ok(list) if !list.is_empty() => view! {
-                        <div class="grid gap-6 lg:grid-cols-2">
+                        <div class="grid gap-4 sm:gap-6 lg:grid-cols-2">
                             <For
                                 each=move || list.clone()
                                 key=|a| (a.start, a.total)
@@ -31,8 +31,8 @@ pub fn AccountAllocations(id: String) -> impl IntoView {
                         </div>
                     }.into_any(),
                     _ => view! {
-                         <div class="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-center">
-                            <p class="text-neutral-500">"No active vesting schedules found for this account."</p>
+                         <div class="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-6 sm:p-8 text-center">
+                            <p class="text-neutral-500 text-sm">"No active vesting schedules found for this account."</p>
                         </div>
                     }.into_any(),
                 })}
@@ -48,7 +48,6 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
     let vested_total = allocation.vested_total;
     let released = allocation.released.min(vested_total);
 
-    // Calcul progress
     let progress = if vested_total == 0 {
         0.0
     } else {
@@ -57,7 +56,6 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
     let progress_pct = format!("{:.1}%", progress * 100.0);
     let bar_w = format!("width: {:.2}%;", (progress * 100.0));
 
-    // Calcul Next Epoch
     let per_block = if env.vesting_duration == 0 {
         0.0
     } else {
@@ -67,34 +65,34 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
 
     view! {
         <Card class="h-full flex flex-col">
-            <div class="flex flex-col h-full gap-6">
+            <div class="flex flex-col h-full gap-5 sm:gap-6">
 
                 // --- HEADER ---
                 <div class="flex items-center justify-between">
-                     <div class="flex items-center gap-2">
-                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-500">"Vesting"</span>
-                        <span class="text-neutral-400 text-xs">"•"</span>
-                        <h3 class="text-base font-semibold text-white truncate">{ env.name }</h3>
+                     <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-500 shrink-0">"Vesting"</span>
+                        <span class="text-neutral-400 text-xs shrink-0">"•"</span>
+                        <h3 class="text-sm sm:text-base font-semibold text-white truncate">{ env.name }</h3>
                     </div>
                      // Badge Blocks
-                    <div class="text-[10px] font-mono text-neutral-500 bg-white/5 px-2 py-1 rounded">
+                    <div class="text-[10px] font-mono text-neutral-500 bg-white/5 px-1.5 py-0.5 rounded shrink-0 ml-2">
                         {blocks_to_str(env.vesting_duration)} " blks"
                     </div>
                 </div>
 
                 // --- MAIN STATS (Grid) ---
-                <div class="grid grid-cols-2 gap-x-4 gap-y-6 py-4 border-y border-dashed border-white/10">
+                <div class="grid grid-cols-2 gap-x-3 gap-y-4 py-4 border-y border-dashed border-white/10">
                     // Total
                     <div>
-                        <div class="text-[10px] uppercase text-neutral-500 mb-1">"Total Allocation"</div>
-                        <div class="text-lg font-mono font-bold text-white" title=format_balance(total, true)>
+                        <div class="text-[10px] uppercase text-neutral-500 mb-1">"Total Alloc."</div>
+                        <div class="text-base sm:text-lg font-mono font-bold text-white truncate" title=format_balance(total, true)>
                             { format_balance(total, true) }
                         </div>
                     </div>
                      // Upfront
                     <div>
-                        <div class="text-[10px] uppercase text-neutral-500 mb-1">"Upfront Received"</div>
-                         <div class="text-lg font-mono font-medium text-neutral-300" title=format_balance(allocation.upfront, true)>
+                        <div class="text-[10px] uppercase text-neutral-500 mb-1">"Upfront Rec."</div>
+                         <div class="text-base sm:text-lg font-mono font-medium text-neutral-300 truncate" title=format_balance(allocation.upfront, true)>
                             { format_balance(allocation.upfront, true) }
                         </div>
                     </div>
@@ -115,15 +113,15 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
                     </div>
                 </div>
 
-                // --- NEXT EPOCH PREDICTION (Terminal Style) ---
+                // --- NEXT EPOCH PREDICTION ---
                 <FetchableData data=epoch_blocks render=move |n_blocks: u32| {
                     let next_epoch: u128 = ((per_block * n_blocks as f64).floor()) as u128;
                     view! {
-                         <div class="mt-auto pt-4">
+                         <div class="mt-auto pt-2 sm:pt-4">
                             <div class="rounded bg-black/40 border border-white/5 p-3 flex items-center justify-between">
                                 <div class="flex flex-col">
                                     <span class="text-[10px] uppercase text-neutral-500">"Next Epoch Release"</span>
-                                    <span class="text-xs text-neutral-600">"Estimated ~24h"</span>
+                                    <span class="text-[10px] sm:text-xs text-neutral-600">"Estimated ~24h"</span>
                                 </div>
                                 <span class="text-sm font-mono font-bold text-emerald-400">
                                     "+"{ format_balance(next_epoch, true) }
@@ -140,7 +138,7 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
 #[component]
 fn AllocationsSkeleton() -> impl IntoView {
     view! {
-        <div class="grid gap-6 lg:grid-cols-2">
+        <div class="grid gap-4 sm:gap-6 lg:grid-cols-2">
             { (0..2).map(|_| view! {
                 <Card class="h-64 animate-pulse">
                     <div class="space-y-4 opacity-50">

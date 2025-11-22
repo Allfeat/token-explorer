@@ -15,21 +15,15 @@ pub fn Card(
     #[prop(into, optional)] class: String,
     children: Children,
 ) -> impl IntoView {
-    let padding_class = if padded { "p-6" } else { "" };
+    let padding_class = if padded { "p-5 sm:p-6" } else { "" };
 
     view! {
         <div class=format!(
             "relative group isolate flex flex-col overflow-hidden rounded-2xl border border-white/5 bg-[#0F0F0F] shadow-lg transition-all hover:border-white/10 hover:shadow-xl {}",
             class
         )>
-            // --- 1. Background Effects ---
-
             <div class="absolute inset-0 -z-10 bg-gradient-to-br from-emerald-500/[0.03] to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100"></div>
-
             <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent"></div>
-
-
-            // --- 2. Content Structure ---
 
             { header.map(|h| view! {
                 <div class=format!("{} border-b border-white/5 bg-white/[0.01]", padding_class)>
