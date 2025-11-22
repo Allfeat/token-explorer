@@ -1,9 +1,10 @@
+use chrono::Datelike;
 use leptos::prelude::*;
 
 #[component]
 pub fn Footer() -> impl IntoView {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    let current_year = 2025; // TODO: dynamic year
+    let current_year = chrono::Utc::now().year();
 
     view! {
         <footer class="relative mt-12 sm:mt-20 border-t border-white/5 bg-[#0b0c0c] py-6 sm:py-8">
