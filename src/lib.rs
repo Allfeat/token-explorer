@@ -8,9 +8,12 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[cfg(feature = "ssr")]
-use crate::substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId;
+use subxt::OnlineClient;
 #[cfg(feature = "ssr")]
-use substrate::get_alloc_config_of;
+use subxt::SubstrateConfig;
+
+#[cfg(feature = "ssr")]
+use crate::substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId;
 #[cfg(feature = "ssr")]
 use subxt::utils::AccountId32;
 
@@ -124,7 +127,7 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
                 envelope: get_alloc_config_of(
                     chain_api,
                     &kv.value.envelope,
-                    substrate::envelope_to_str(&kv.value.envelope),
+                    envelope_to_str(&kv.value.envelope),
                 )
                 .await?,
                 total: kv.value.total,
@@ -212,5 +215,64 @@ pub async fn get_balance_of(id: String) -> Result<Balances, ServerFnError> {
         free: account_info.data.free,
         reserved: account_info.data.reserved,
         frozen: account_info.data.frozen,
+    })
+}
+
+#[cfg(feature = "ssr")]
+pub fn envelope_to_str(envelope: &EnvelopeId) -> &str {
+    match envelope {
+        EnvelopeId::Airdrop => "Airdrop",
+        EnvelopeId::CommunityRewards => "Community Rewards",
+        EnvelopeId::Private1 => "Private Funding #1",
+        EnvelopeId::Private2 => "Private Funding #2",
+        EnvelopeId::Seed => "Seed Funding",
+        EnvelopeId::SerieA => "Serie A Funding",
+        EnvelopeId::ICO1 => "ICO #1",
+        EnvelopeId::ICO2 => "ICO #2",
+        EnvelopeId::Founders => "Founders",
+        EnvelopeId::Reserve => "Reserve",
+        EnvelopeId::Exchanges => "Exchanges (CEX/DEX)",
+        EnvelopeId::ResearchDevelopment => "Research & Development",
+        EnvelopeId::KoL => "KoL Funding",
+    }
+}
+
+#[cfg(feature = "ssr")]
+pub async fn get_alloc_config_of(
+    chain_api: &OnlineClient<SubstrateConfig>,
+    envelope: &EnvelopeId,
+    name: &str,
+) -> Result<EnvelopeAllocation, ServerFnError> {
+    let query = substrate::allfeat::storage()
+        .token_allocation()
+        .envelopes(envelope.clone());
+    let query_distributed = substrate::allfeat::storage()
+        .token_allocation()
+        .envelope_distributed(envelope.clone());
+
+    let res = chain_api
+        .storage()
+        .at_latest()
+        .await?
+        .fetch(&query)
+        .await?
+        .unwrap();
+    let res_distributed = chain_api
+        .storage()
+        .at_latest()
+        .await?
+        .fetch(&query_distributed)
+        .await?
+        .unwrap();
+
+    Ok(EnvelopeAllocation {
+        id: name.to_lowercase().to_string(),
+        name: name.to_string(),
+        total_cap: res.total_cap,
+        unique_beneficiary: res.unique_beneficiary.map(|addr| addr.to_string()),
+        cliff: res.cliff,
+        vesting_duration: res.vesting_duration,
+        distributed: res_distributed,
+        upfront_rate: res.upfront_rate.0,
     })
 }

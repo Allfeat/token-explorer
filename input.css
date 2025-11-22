@@ -15,4 +15,13 @@
   .animate-fade-in-right {
     animation: fade-in-right 0.25s ease-out;
   }
+
+  @keyframes block-fill {
+    from { stroke-dashoffset: 62.83; }
+    to { stroke-dashoffset: 0; }
+  }
+
+  .animate-block-fill {
+    animation: block-fill 12s linear forwards;
+  }
 }

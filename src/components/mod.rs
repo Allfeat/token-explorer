@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 
+pub mod block_status;
 pub mod fetchable_balance;
 pub mod footer;
 pub mod header;

@@ -1,6 +1,11 @@
-use std::sync::Arc;
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
-use leptos::{logging::log, prelude::ServerFnError};
+use axum::response::{
+    Sse,
+    sse::{Event, KeepAlive},
+};
+use futures::{Stream, StreamExt};
+use leptos::logging::log;
 use subxt::{
     OnlineClient, SubstrateConfig,
     backend::chain_head::{ChainHeadBackend, ChainHeadBackendBuilder},
@@ -8,10 +13,6 @@ use subxt::{
 };
 
 use tokio::sync::OnceCell;
-
-use crate::{
-    EnvelopeAllocation, substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId,
-};
 
 // Generate an interface that we can use from the node's metadata.
 #[subxt::subxt(
@@ -47,59 +48,26 @@ pub async fn start_lightclient() -> Result<OnlineClient<SubstrateConfig>, Box<dy
     Ok(api)
 }
 
-pub fn envelope_to_str(envelope: &EnvelopeId) -> &str {
-    match envelope {
-        EnvelopeId::Airdrop => "Airdrop",
-        EnvelopeId::CommunityRewards => "Community Rewards",
-        EnvelopeId::Private1 => "Private Funding #1",
-        EnvelopeId::Private2 => "Private Funding #2",
-        EnvelopeId::Seed => "Seed Funding",
-        EnvelopeId::SerieA => "Serie A Funding",
-        EnvelopeId::ICO1 => "ICO #1",
-        EnvelopeId::ICO2 => "ICO #2",
-        EnvelopeId::Founders => "Founders",
-        EnvelopeId::Reserve => "Reserve",
-        EnvelopeId::Exchanges => "Exchanges (CEX/DEX)",
-        EnvelopeId::ResearchDevelopment => "Research & Development",
-        EnvelopeId::KoL => "KoL Funding",
-    }
-}
+#[allow(unused)]
+pub async fn sse_block_handler() -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let chain_api = chain_api().await;
 
-pub async fn get_alloc_config_of(
-    chain_api: &OnlineClient<SubstrateConfig>,
-    envelope: &EnvelopeId,
-    name: &str,
-) -> Result<EnvelopeAllocation, ServerFnError> {
-    let query = allfeat::storage()
-        .token_allocation()
-        .envelopes(envelope.clone());
-    let query_distributed = allfeat::storage()
-        .token_allocation()
-        .envelope_distributed(envelope.clone());
+    let blocks_sub = chain_api
+        .blocks()
+        .subscribe_finalized()
+        .await
+        .expect("Failed to subscribe");
 
-    let res = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .fetch(&query)
-        .await?
-        .unwrap();
-    let res_distributed = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .fetch(&query_distributed)
-        .await?
-        .unwrap();
+    let stream = blocks_sub.map(|block_result| match block_result {
+        Ok(block) => {
+            let num = block.number();
+            Ok(Event::default().data(num.to_string()))
+        }
+        Err(err) => {
+            eprintln!("Erreur RPC: {}", err);
+            Ok(Event::default().comment(format!("error: {}", err)))
+        }
+    });
 
-    Ok(EnvelopeAllocation {
-        id: name.to_lowercase().to_string(),
-        name: name.to_string(),
-        total_cap: res.total_cap,
-        unique_beneficiary: res.unique_beneficiary.map(|addr| addr.to_string()),
-        cliff: res.cliff,
-        vesting_duration: res.vesting_duration,
-        distributed: res_distributed,
-        upfront_rate: res.upfront_rate.0,
-    })
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(10)))
 }
