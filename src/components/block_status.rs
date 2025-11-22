@@ -91,7 +91,6 @@ pub fn BlockStatus() -> impl IntoView {
     }
 }
 
-// Helper function (identique à avant)
 fn format_number(num: u64) -> String {
     let s = num.to_string();
     let mut out = String::with_capacity(s.len() + (s.len() / 3));
