@@ -1,5 +1,7 @@
+use leptos::server_fn::codec::StreamingText;
+use leptos::server_fn::codec::TextStream;
 #[cfg(feature = "ssr")]
-use std::str::FromStr;
+use ssr::*;
 
 use leptos::prelude::*;
 use leptos::server;
@@ -8,23 +10,14 @@ use serde::Deserialize;
 use serde::Serialize;
 
 #[cfg(feature = "ssr")]
-use subxt::OnlineClient;
-#[cfg(feature = "ssr")]
-use subxt::SubstrateConfig;
-
-#[cfg(feature = "ssr")]
-use crate::substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId;
-#[cfg(feature = "ssr")]
-use subxt::utils::AccountId32;
-
+pub mod state;
 #[cfg(feature = "ssr")]
 mod substrate;
 
-pub mod components;
-pub mod utils;
-
 pub mod app;
+pub mod components;
 mod pages;
+pub mod utils;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
@@ -63,36 +56,63 @@ pub struct Allocation {
     pub start: u32,
 }
 
+#[server(output = StreamingText)]
+pub async fn get_block_number_stream() -> Result<TextStream, ServerFnError> {
+    use futures::StreamExt;
+    use tracing::error;
+
+    let chain_api = get_chain_api().await?;
+
+    let blocks_sub = chain_api
+        .blocks()
+        .subscribe_finalized()
+        .await
+        .expect("Failed to subscribe");
+
+    let stream = blocks_sub.map(|block_result| match block_result {
+        Ok(block) => {
+            let num = block.header().number;
+            Ok(num.to_string())
+        }
+        Err(err) => {
+            error!("RPC Error: {err}");
+            Ok("Error".to_string())
+        }
+    });
+
+    Ok(TextStream::new(stream))
+}
+
 #[server]
 pub async fn get_allocations() -> Result<Vec<EnvelopeAllocation>, ServerFnError> {
-    let chain_api = substrate::chain_api().await;
+    let chain_api = get_chain_api().await?;
 
     // FIXME: https://github.com/paritytech/subxt/issues/1743 not using an iter on storage
     // cause of this
     let v = vec![
-        get_alloc_config_of(chain_api, &EnvelopeId::Airdrop, "Airdrop").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Airdrop, "Airdrop").await?,
         get_alloc_config_of(
-            chain_api,
+            &chain_api,
             &EnvelopeId::CommunityRewards,
             "Community Rewards",
         )
         .await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::Private1, "Private Funding #1").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::Private2, "Private Funding #2").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::Seed, "Seed Funding").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::SerieA, "Serie A Funding").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::ICO1, "ICO #1").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::ICO2, "ICO #2").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::Founders, "Founders").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::Reserve, "Reserve").await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::Exchanges, "Exchanges (CEX/DEX)").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Private1, "Private Funding #1").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Private2, "Private Funding #2").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Seed, "Seed Funding").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::SerieA, "Serie A Funding").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::ICO1, "ICO #1").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::ICO2, "ICO #2").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Founders, "Founders").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Reserve, "Reserve").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::Exchanges, "Exchanges (CEX/DEX)").await?,
         get_alloc_config_of(
-            chain_api,
+            &chain_api,
             &EnvelopeId::ResearchDevelopment,
             "Research & Development",
         )
         .await?,
-        get_alloc_config_of(chain_api, &EnvelopeId::KoL, "KoL Funding").await?,
+        get_alloc_config_of(&chain_api, &EnvelopeId::KoL, "KoL Funding").await?,
     ];
 
     Ok(v)
@@ -100,7 +120,7 @@ pub async fn get_allocations() -> Result<Vec<EnvelopeAllocation>, ServerFnError>
 
 #[server]
 pub async fn get_epoch_duration() -> Result<u32, ServerFnError> {
-    let chain_api = substrate::chain_api().await;
+    let chain_api = get_chain_api().await?;
 
     let query = substrate::allfeat::constants()
         .token_allocation()
@@ -111,7 +131,7 @@ pub async fn get_epoch_duration() -> Result<u32, ServerFnError> {
 
 #[server]
 pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnError> {
-    let chain_api = substrate::chain_api().await;
+    let chain_api = get_chain_api().await?;
 
     let query = substrate::allfeat::storage()
         .token_allocation()
@@ -125,7 +145,7 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
         if kv.value.beneficiary.to_string() == id {
             allocs.push(Allocation {
                 envelope: get_alloc_config_of(
-                    chain_api,
+                    &chain_api,
                     &kv.value.envelope,
                     envelope_to_str(&kv.value.envelope),
                 )
@@ -144,7 +164,8 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
 
 #[server]
 pub async fn get_total_issuance() -> Result<u128, ServerFnError> {
-    let chain_api = substrate::chain_api().await;
+    let chain_api = get_chain_api().await?;
+
     let query = substrate::allfeat::storage().balances().total_issuance();
 
     Ok(chain_api
@@ -158,7 +179,7 @@ pub async fn get_total_issuance() -> Result<u128, ServerFnError> {
 
 #[server]
 pub async fn get_circulating_supply() -> Result<u128, ServerFnError> {
-    let chain_api = substrate::chain_api().await;
+    let chain_api = get_chain_api().await?;
 
     let distributed_query = substrate::allfeat::storage()
         .token_allocation()
@@ -198,7 +219,8 @@ pub async fn get_circulating_supply() -> Result<u128, ServerFnError> {
 
 #[server]
 pub async fn get_balance_of(id: String) -> Result<Balances, ServerFnError> {
-    let chain_api = substrate::chain_api().await;
+    let chain_api = get_chain_api().await?;
+
     let query = substrate::allfeat::storage()
         .system()
         .account(AccountId32::from_str(&id).expect("Valid address"));
@@ -219,60 +241,80 @@ pub async fn get_balance_of(id: String) -> Result<Balances, ServerFnError> {
 }
 
 #[cfg(feature = "ssr")]
-pub fn envelope_to_str(envelope: &EnvelopeId) -> &str {
-    match envelope {
-        EnvelopeId::Airdrop => "Airdrop",
-        EnvelopeId::CommunityRewards => "Community Rewards",
-        EnvelopeId::Private1 => "Private Funding #1",
-        EnvelopeId::Private2 => "Private Funding #2",
-        EnvelopeId::Seed => "Seed Funding",
-        EnvelopeId::SerieA => "Serie A Funding",
-        EnvelopeId::ICO1 => "ICO #1",
-        EnvelopeId::ICO2 => "ICO #2",
-        EnvelopeId::Founders => "Founders",
-        EnvelopeId::Reserve => "Reserve",
-        EnvelopeId::Exchanges => "Exchanges (CEX/DEX)",
-        EnvelopeId::ResearchDevelopment => "Research & Development",
-        EnvelopeId::KoL => "KoL Funding",
+mod ssr {
+    pub use super::state::AppState;
+    pub use super::substrate::AllfeatClient;
+    pub use super::substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId;
+    use super::*;
+    pub use std::str::FromStr;
+    pub use subxt::OnlineClient;
+    pub use subxt::SubstrateConfig;
+    pub use subxt::utils::AccountId32;
+
+    pub async fn get_chain_api() -> Result<AllfeatClient, ServerFnError> {
+        use axum::extract::State;
+        use leptos_axum::extract_with_state;
+
+        let state = expect_context::<AppState>();
+        let State(client): State<AppState> = extract_with_state(&state).await?;
+
+        Ok(client.client)
     }
-}
 
-#[cfg(feature = "ssr")]
-pub async fn get_alloc_config_of(
-    chain_api: &OnlineClient<SubstrateConfig>,
-    envelope: &EnvelopeId,
-    name: &str,
-) -> Result<EnvelopeAllocation, ServerFnError> {
-    let query = substrate::allfeat::storage()
-        .token_allocation()
-        .envelopes(envelope.clone());
-    let query_distributed = substrate::allfeat::storage()
-        .token_allocation()
-        .envelope_distributed(envelope.clone());
+    pub fn envelope_to_str(envelope: &EnvelopeId) -> &str {
+        match envelope {
+            EnvelopeId::Airdrop => "Airdrop",
+            EnvelopeId::CommunityRewards => "Community Rewards",
+            EnvelopeId::Private1 => "Private Funding #1",
+            EnvelopeId::Private2 => "Private Funding #2",
+            EnvelopeId::Seed => "Seed Funding",
+            EnvelopeId::SerieA => "Serie A Funding",
+            EnvelopeId::ICO1 => "ICO #1",
+            EnvelopeId::ICO2 => "ICO #2",
+            EnvelopeId::Founders => "Founders",
+            EnvelopeId::Reserve => "Reserve",
+            EnvelopeId::Exchanges => "Exchanges (CEX/DEX)",
+            EnvelopeId::ResearchDevelopment => "Research & Development",
+            EnvelopeId::KoL => "KoL Funding",
+        }
+    }
 
-    let res = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .fetch(&query)
-        .await?
-        .unwrap();
-    let res_distributed = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .fetch(&query_distributed)
-        .await?
-        .unwrap();
+    pub async fn get_alloc_config_of(
+        chain_api: &OnlineClient<SubstrateConfig>,
+        envelope: &EnvelopeId,
+        name: &str,
+    ) -> Result<EnvelopeAllocation, ServerFnError> {
+        let query = substrate::allfeat::storage()
+            .token_allocation()
+            .envelopes(envelope.clone());
+        let query_distributed = substrate::allfeat::storage()
+            .token_allocation()
+            .envelope_distributed(envelope.clone());
 
-    Ok(EnvelopeAllocation {
-        id: name.to_lowercase().to_string(),
-        name: name.to_string(),
-        total_cap: res.total_cap,
-        unique_beneficiary: res.unique_beneficiary.map(|addr| addr.to_string()),
-        cliff: res.cliff,
-        vesting_duration: res.vesting_duration,
-        distributed: res_distributed,
-        upfront_rate: res.upfront_rate.0,
-    })
+        let res = chain_api
+            .storage()
+            .at_latest()
+            .await?
+            .fetch(&query)
+            .await?
+            .unwrap();
+        let res_distributed = chain_api
+            .storage()
+            .at_latest()
+            .await?
+            .fetch(&query_distributed)
+            .await?
+            .unwrap();
+
+        Ok(EnvelopeAllocation {
+            id: name.to_lowercase().to_string(),
+            name: name.to_string(),
+            total_cap: res.total_cap,
+            unique_beneficiary: res.unique_beneficiary.map(|addr| addr.to_string()),
+            cliff: res.cliff,
+            vesting_duration: res.vesting_duration,
+            distributed: res_distributed,
+            upfront_rate: res.upfront_rate.0,
+        })
+    }
 }
