@@ -60,7 +60,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.INFRA_REPO_OWNER }}/${{ vars.INFRA_REPO_NAME }}
-          token: ${{ secrets.INFRA_REPO_PAT }}
+          token: ${{ secrets.CI_INFRA_KUBE_PAT }}
           path: infrastructure
           ref: master
 
