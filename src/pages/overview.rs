@@ -55,7 +55,7 @@ pub fn Overview() -> impl IntoView {
                                 type="text"
                                 autocomplete="off"
                                 spellcheck="false"
-                                placeholder="Search by account address (5Gx...)"
+                                placeholder="Search by account address (qGx...)"
                                 class="h-12 sm:h-14 w-full bg-transparent px-3 sm:px-4 text-base text-white placeholder:text-neutral-600 focus:outline-none"
                                 prop:value=address
                                 on:input=move |ev| address.set(event_target_value(&ev))

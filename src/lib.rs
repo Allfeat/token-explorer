@@ -12,7 +12,7 @@ use serde::Serialize;
 #[cfg(feature = "ssr")]
 pub mod state;
 #[cfg(feature = "ssr")]
-mod substrate;
+pub mod substrate;
 
 pub mod app;
 pub mod components;
@@ -142,7 +142,7 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
     let mut allocs: Vec<Allocation> = vec![];
 
     while let Some(Ok(kv)) = allocs_iter.next().await {
-        if kv.value.beneficiary.to_string() == id {
+        if format_ss58(&kv.value.beneficiary) == id {
             allocs.push(Allocation {
                 envelope: get_alloc_config_of(
                     &chain_api,
@@ -251,6 +251,37 @@ mod ssr {
     pub use subxt::SubstrateConfig;
     pub use subxt::utils::AccountId32;
 
+    /// Encode an AccountId32 to SS58 format with the Allfeat prefix (440)
+    pub fn format_ss58(account: &AccountId32) -> String {
+        use blake2::{Blake2b512, Digest};
+        use crate::utils::SS58_PREFIX;
+
+        const SS58_PREFIX_BYTES: &[u8] = b"SS58PRE";
+
+        let public_key: &[u8; 32] = account.as_ref();
+
+        // For prefix > 63, use two-byte encoding
+        let prefix_bytes = [
+            ((SS58_PREFIX & 0x00FC) as u8 >> 2) | 0x40,
+            ((SS58_PREFIX >> 8) as u8) | ((SS58_PREFIX & 0x0003) as u8) << 6,
+        ];
+
+        // Compute checksum: blake2b-512 of (SS58PRE || prefix || pubkey)
+        let mut hasher = Blake2b512::new();
+        hasher.update(SS58_PREFIX_BYTES);
+        hasher.update(&prefix_bytes);
+        hasher.update(public_key);
+        let hash = hasher.finalize();
+
+        // Build the full address: prefix (2 bytes) + pubkey (32 bytes) + checksum (2 bytes)
+        let mut address = Vec::with_capacity(36);
+        address.extend_from_slice(&prefix_bytes);
+        address.extend_from_slice(public_key);
+        address.extend_from_slice(&hash[0..2]);
+
+        bs58::encode(address).into_string()
+    }
+
     pub async fn get_chain_api() -> Result<AllfeatClient, ServerFnError> {
         use axum::extract::State;
         use leptos_axum::extract_with_state;
@@ -310,7 +341,7 @@ mod ssr {
             id: name.to_lowercase().to_string(),
             name: name.to_string(),
             total_cap: res.total_cap,
-            unique_beneficiary: res.unique_beneficiary.map(|addr| addr.to_string()),
+            unique_beneficiary: res.unique_beneficiary.map(|addr| format_ss58(&addr)),
             cliff: res.cliff,
             vesting_duration: res.vesting_duration,
             distributed: res_distributed,

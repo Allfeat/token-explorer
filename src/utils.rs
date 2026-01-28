@@ -1,14 +1,56 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-pub const TREASURY_ACCOUNT: &str = "5EYCAe5ijiYfyeZ2JJCGq56LmPyNRAKzpG4QkoQkkQNB5e6Z";
+pub const TREASURY_ACCOUNT: &str = "qSwoJVKfgchSRjD6CZ739j9G7zR1khXqkvbeMVCN1NPKJgeup";
 
-pub const SECS_PER_BLOCK: u64 = 12;
+pub const SS58_PREFIX: u16 = 440;
+
+pub const SECS_PER_BLOCK: u64 = 6;
 
 pub const DAY: u64 = 86_400;
 pub const WEEK: u64 = 7 * DAY;
 pub const MONTH: u64 = 30 * DAY;
 pub const YEAR: u64 = 12 * MONTH;
+
+/// Known addresses with human-readable names
+const KNOWN_ADDRESSES: &[(&str, &str)] = &[
+    (TREASURY_ACCOUNT, "Allfeat Foundation"),
+];
+
+/// Returns the known name for an address, or None if not known
+pub fn get_known_address_name(address: &str) -> Option<&'static str> {
+    KNOWN_ADDRESSES
+        .iter()
+        .find(|(addr, _)| *addr == address)
+        .map(|(_, name)| *name)
+}
+
+/// Returns either the known name or the address itself
+pub fn display_address(address: &str) -> String {
+    get_known_address_name(address)
+        .map(|name| name.to_string())
+        .unwrap_or_else(|| address.to_string())
+}
+
+/// Returns the known name with the address as a shortened suffix, or just the address if not known
+/// Example: "Allfeat Foundation (qSwo...Jgeup)" or "qSwoJVKf...N1NPKJgeup"
+pub fn display_address_with_hint(address: &str) -> String {
+    if let Some(name) = get_known_address_name(address) {
+        let short = shorten_address(address);
+        format!("{} ({})", name, short)
+    } else {
+        address.to_string()
+    }
+}
+
+/// Shortens an address to show first 4 and last 5 characters
+pub fn shorten_address(address: &str) -> String {
+    if address.len() > 12 {
+        format!("{}...{}", &address[..4], &address[address.len() - 5..])
+    } else {
+        address.to_string()
+    }
+}
 
 /// Generates a unique, stylized SS58 Identicon SVG for a given address.
 /// The pattern and colors are heavily seeded by the address content.

@@ -10,16 +10,18 @@ async fn main() {
     use tracing::error;
     use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
+    dotenvy::dotenv().ok();
+
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
     tracing_subscriber::registry()
         .with(fmt::layer())
         .with(filter)
         .init();
 
-    let client = match substrate::start_lightclient().await {
+    let client = match rpc::connect().await {
         Ok(c) => c,
         Err(e) => {
-            error!("CRITICAL: Failed to start Light Client: {e}");
+            error!("CRITICAL: Failed to connect to RPC endpoint: {e}");
             std::process::exit(1);
         }
     };
@@ -61,32 +63,30 @@ async fn main() {
 }
 
 #[cfg(feature = "ssr")]
-mod substrate {
-    use std::sync::Arc;
+mod rpc {
+    use std::time::Duration;
+    use subxt::OnlineClient;
+    use subxt::backend::rpc::reconnecting_rpc_client::{ExponentialBackoff, RpcClient};
+    use token_app::substrate::AllfeatClient;
 
-    use subxt::{
-        OnlineClient, SubstrateConfig,
-        backend::chain_head::ChainHeadBackendBuilder,
-        lightclient::{ChainConfig, LightClient},
-    };
+    pub async fn connect() -> Result<AllfeatClient, Box<dyn std::error::Error + Send + Sync>> {
+        let rpc_url = std::env::var("RPC_URL")
+            .unwrap_or_else(|_| "wss://mainnet.rpc.allfeat.org".to_string());
 
-    pub type AllfeatClient = OnlineClient<SubstrateConfig>;
+        tracing::info!(target: "allfeat", "Connecting to RPC: {}", rpc_url);
 
-    const ALLFEAT_SPEC: &str = include_str!("../allfeat.json");
+        let rpc = RpcClient::builder()
+            .retry_policy(
+                ExponentialBackoff::from_millis(100)
+                    .max_delay(Duration::from_secs(10))
+                    .take(5),
+            )
+            .build(rpc_url)
+            .await?;
 
-    pub async fn start_lightclient() -> Result<AllfeatClient, Box<dyn std::error::Error>> {
-        use tracing::info;
+        let api = OnlineClient::from_rpc_client(rpc).await?;
 
-        info!("🚀 Starting Allfeat lightclient...");
-        let chain_config = ChainConfig::chain_spec(ALLFEAT_SPEC);
-
-        let (_, chain_rpc) = LightClient::relay_chain(chain_config)?;
-
-        let backend = ChainHeadBackendBuilder::default().build_with_background_driver(chain_rpc);
-
-        let api = AllfeatClient::from_backend(Arc::new(backend)).await?;
-
-        info!("✅ Allfeat lightclient synced and ready.");
+        tracing::info!(target: "allfeat", "Connected to Allfeat network");
         Ok(api)
     }
 }

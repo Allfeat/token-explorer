@@ -1,7 +1,7 @@
 use crate::{
     components::toast::use_toast,
     pages::accounts::{allocations::AccountAllocations, balances::AccountBalances},
-    utils::ss58_identicon_svg,
+    utils::{get_known_address_name, ss58_identicon_svg},
 };
 use leptos::prelude::*;
 use leptos_router::hooks::use_params_map;
@@ -42,12 +42,25 @@ pub fn Account() -> impl IntoView {
                             "Account Details"
                         </h1>
 
+                        // Show known name if available
+                        { move || get_known_address_name(&address.get()).map(|name| view! {
+                            <h2 class="text-xl sm:text-2xl font-bold text-white mb-1">
+                                {name}
+                            </h2>
+                        })}
+
                         <button
                             class="group flex items-center gap-2 sm:gap-3 text-left transition-all active:scale-[0.98] w-full"
                             on:click=copy_to_clipboard
                             title="Click to copy"
                         >
-                            <span class="text-lg sm:text-3xl font-mono font-bold text-white break-all hover:text-emerald-50 transition-colors leading-tight">
+                            <span class=move || {
+                                if get_known_address_name(&address.get()).is_some() {
+                                    "text-sm sm:text-base font-mono text-neutral-400 break-all hover:text-neutral-300 transition-colors leading-tight"
+                                } else {
+                                    "text-lg sm:text-3xl font-mono font-bold text-white break-all hover:text-emerald-50 transition-colors leading-tight"
+                                }
+                            }>
                                 { move || address.get() }
                             </span>
 

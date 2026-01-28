@@ -42,10 +42,6 @@
               leptosfmt
               subxt
               tailwindcss_4
-            ]
-            ++ lib.optionals stdenv.hostPlatform.isDarwin [
-              darwin.apple_sdk.frameworks.Security
-              darwin.apple_sdk.frameworks.SystemConfiguration
             ];
         };
       }

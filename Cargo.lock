@@ -960,6 +960,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dotenvy"
+version = "0.15.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1aaf95b3e5c8f23aa320147307562d361db0ae0d51242340f558153b4eb2439b"
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1080,6 +1086,16 @@ name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a3076410a55c90011c298b04d0cfa770b00fa04e1e3c97d3f6c9de105a03844"
+
+[[package]]
+name = "finito"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2384245d85162258a14b43567a9ee3598f5ae746a1581fb5d3d2cb780f0dbf95"
+dependencies = [
+ "futures-timer",
+ "pin-project",
+]
 
 [[package]]
 name = "fixed-hash"
@@ -3913,6 +3929,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab68a9c20ecedb0cb7d62d64f884e6add91bb70485783bf40aa8eac5c389c6e0"
 dependencies = [
  "derive-where",
+ "finito",
  "frame-metadata",
  "futures",
  "hex",
@@ -3925,6 +3942,7 @@ dependencies = [
  "subxt-core",
  "subxt-lightclient",
  "thiserror 2.0.17",
+ "tokio",
  "tokio-util",
  "tracing",
  "url",
@@ -4143,11 +4161,14 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "token-app"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "axum",
+ "blake2",
+ "bs58",
  "chrono",
  "console_error_panic_hook",
+ "dotenvy",
  "futures",
  "gloo-timers",
  "leptos",

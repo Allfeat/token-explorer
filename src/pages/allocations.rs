@@ -2,7 +2,7 @@ use crate::{
     EnvelopeAllocation,
     components::{Card, fetchable_balance::FetchableData, toast::use_toast},
     get_allocations,
-    utils::{blocks_to_human_duration, blocks_to_str, format_balance, ss58_identicon_svg},
+    utils::{blocks_to_human_duration, blocks_to_str, display_address, format_balance, ss58_identicon_svg},
 };
 use leptos::prelude::*;
 
@@ -153,8 +153,9 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
                 // --- 5. UNIQUE BENEFICIARY (Alternative Footer) ---
                 { move || env.unique_beneficiary.as_ref().map(|addr| {
                     let full_address: String = addr.clone();
+                    let display_name = display_address(&full_address);
                     let copy_closure = copy_to_clipboard.clone();
-                                                                         view! {
+                    view! {
                      <div class="mt-auto rounded-xl bg-white/[0.03] border border-white/5 p-3">
                         <div class="flex items-center gap-3 overflow-hidden">
                             <div class="h-8 w-8 rounded-full bg-black ring-1 ring-white/10 shrink-0 flex items-center justify-center">
@@ -165,8 +166,8 @@ pub fn AllocationCard(env: EnvelopeAllocation) -> impl IntoView {
                             <div class="flex-1 min-w-0">
                                 <div class="text-[10px] uppercase text-neutral-500 mb-0.5">"Allocated to"</div>
                                 <div class="flex items-center gap-2">
-                                    <span class="text-xs text-neutral-300 font-mono truncate block">
-                                        {full_address.clone()}
+                                    <span class="text-xs text-neutral-300 font-mono truncate block" title=full_address.clone()>
+                                        {display_name}
                                     </span>
                                     // Copy Button (Minimalist)
                                     <button

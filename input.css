@@ -22,6 +22,6 @@
   }
 
   .animate-block-fill {
-    animation: block-fill 12s linear forwards;
+    animation: block-fill 6s linear forwards;
   }
 }
