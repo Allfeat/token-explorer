@@ -35,6 +35,7 @@ async fn main() {
     let app_state = AppState {
         leptos_options: leptos_options.clone(),
         client,
+        allocations_cache: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
     };
 
     let app = Router::new()

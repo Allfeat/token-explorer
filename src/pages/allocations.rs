@@ -29,10 +29,12 @@ pub fn Allocations() -> impl IntoView {
             <FetchableData
                 data=allocations
                 render={move |items: Vec<EnvelopeAllocation>| {
+                    // Store items in a signal to avoid cloning on every render
+                    let items_signal = RwSignal::new(items);
                     view! {
                         <div class="grid gap-4 sm:gap-6 md:grid-cols-2 xl:grid-cols-3">
                             <For
-                                each=move || items.clone()
+                                each=move || items_signal.get()
                                 key=|env| env.id.clone()
                                 children=move |env| {
                                     view! { <AllocationCard env /> }

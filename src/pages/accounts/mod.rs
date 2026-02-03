@@ -16,6 +16,9 @@ pub fn Account() -> impl IntoView {
 
     let address = Memo::new(move |_| params.read().get("id").unwrap_or_default());
 
+    // Memoize the identicon SVG to avoid recalculating on every render
+    let identicon_svg = Memo::new(move |_| ss58_identicon_svg(&address.get(), 64));
+
     let copy_to_clipboard = move |_| {
         let addr = address.get();
         let _ = window().navigator().clipboard().write_text(&addr);
@@ -33,7 +36,7 @@ pub fn Account() -> impl IntoView {
                     <div class="relative group shrink-0">
                         <div class="absolute -inset-0.5 bg-gradient-to-br from-emerald-500 to-cyan-500 rounded-full opacity-30 blur group-hover:opacity-60 transition duration-500"></div>
                         <div class="relative h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-[#050505] ring-2 ring-white/10 flex items-center justify-center overflow-hidden">
-                             <div inner_html=move || ss58_identicon_svg(&address.get(), 64) />
+                             <div inner_html=move || identicon_svg.get() />
                         </div>
                     </div>
 
@@ -72,8 +75,13 @@ pub fn Account() -> impl IntoView {
                 </div>
             </section>
 
-            <AccountBalances id=address.get() />
-            <AccountAllocations id=address.get() />
+            {move || {
+                let id = address.get();
+                view! {
+                    <AccountBalances id=id.clone() />
+                    <AccountAllocations id=id />
+                }
+            }}
         </div>
     }
 }

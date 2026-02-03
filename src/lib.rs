@@ -67,7 +67,7 @@ pub async fn get_block_number_stream() -> Result<TextStream, ServerFnError> {
         .blocks()
         .subscribe_finalized()
         .await
-        .expect("Failed to subscribe");
+        .map_err(|e| ServerFnError::new(format!("Failed to subscribe to blocks: {e}")))?;
 
     let stream = blocks_sub.map(|block_result| match block_result {
         Ok(block) => {
@@ -85,37 +85,47 @@ pub async fn get_block_number_stream() -> Result<TextStream, ServerFnError> {
 
 #[server]
 pub async fn get_allocations() -> Result<Vec<EnvelopeAllocation>, ServerFnError> {
+    use futures::future::try_join_all;
+    use std::time::Duration;
+
+    const CACHE_TTL: Duration = Duration::from_secs(300); // 5 minutes
+
+    let state = expect_context::<AppState>();
+
+    // Check cache first
+    {
+        let cache = state.allocations_cache.read().await;
+        if let Some(cached) = &*cache {
+            if cached.cached_at.elapsed() < CACHE_TTL {
+                return Ok(cached.data.clone());
+            }
+        }
+    }
+
+    // Cache miss or expired - fetch fresh data
     let chain_api = get_chain_api().await?;
 
-    // FIXME: https://github.com/paritytech/subxt/issues/1743 not using an iter on storage
-    // cause of this
-    let v = vec![
-        get_alloc_config_of(&chain_api, &EnvelopeId::Airdrop, "Airdrop").await?,
-        get_alloc_config_of(
-            &chain_api,
-            &EnvelopeId::CommunityRewards,
-            "Community Rewards",
-        )
-        .await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::Private1, "Private Funding #1").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::Private2, "Private Funding #2").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::Seed, "Seed Funding").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::SerieA, "Serie A Funding").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::ICO1, "ICO #1").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::ICO2, "ICO #2").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::Founders, "Founders").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::Reserve, "Reserve").await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::Exchanges, "Exchanges (CEX/DEX)").await?,
-        get_alloc_config_of(
-            &chain_api,
-            &EnvelopeId::ResearchDevelopment,
-            "Research & Development",
-        )
-        .await?,
-        get_alloc_config_of(&chain_api, &EnvelopeId::KoL, "KoL Funding").await?,
-    ];
+    // Get block reference once and reuse for all queries (batching optimization)
+    let block = chain_api.blocks().at_latest().await?;
+    let block_ref = block.reference();
 
-    Ok(v)
+    // Parallelize all envelope queries using centralized ENVELOPES config
+    let futures = ENVELOPES
+        .iter()
+        .map(|(id, name)| get_alloc_config_of(&chain_api, &block_ref, id, name));
+
+    let results = try_join_all(futures).await?;
+
+    // Update cache
+    {
+        let mut cache = state.allocations_cache.write().await;
+        *cache = Some(CachedData {
+            data: results.clone(),
+            cached_at: std::time::Instant::now(),
+        });
+    }
+
+    Ok(results)
 }
 
 #[server]
@@ -137,7 +147,11 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
         .token_allocation()
         .allocations_iter();
 
-    let mut allocs_iter = chain_api.storage().at_latest().await?.iter(query).await?;
+    // Get block reference to ensure consistency across queries
+    let block = chain_api.blocks().at_latest().await?;
+    let block_ref = block.reference();
+    let storage = chain_api.storage().at(block_ref.clone());
+    let mut allocs_iter = storage.iter(query).await?;
 
     let mut allocs: Vec<Allocation> = vec![];
 
@@ -146,6 +160,7 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
             allocs.push(Allocation {
                 envelope: get_alloc_config_of(
                     &chain_api,
+                    &block_ref,
                     &kv.value.envelope,
                     envelope_to_str(&kv.value.envelope),
                 )
@@ -168,13 +183,15 @@ pub async fn get_total_issuance() -> Result<u128, ServerFnError> {
 
     let query = substrate::allfeat::storage().balances().total_issuance();
 
-    Ok(chain_api
+    let total = chain_api
         .storage()
         .at_latest()
         .await?
         .fetch(&query)
         .await?
-        .unwrap())
+        .ok_or_else(|| ServerFnError::new("Total issuance not found on chain"))?;
+
+    Ok(total)
 }
 
 #[server]
@@ -188,24 +205,17 @@ pub async fn get_circulating_supply() -> Result<u128, ServerFnError> {
         .token_allocation()
         .allocations_iter();
 
-    let mut distributed_iter = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .iter(distributed_query)
-        .await?;
+    // Use a single block reference for both iterators (consistency + fewer RPC calls)
+    let storage = chain_api.storage().at_latest().await?;
+
+    let mut distributed_iter = storage.iter(distributed_query).await?;
 
     let mut total_distributed: u128 = 0;
     while let Some(Ok(kv)) = distributed_iter.next().await {
         total_distributed += kv.value
     }
 
-    let mut allocations_iter = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .iter(allocations_query)
-        .await?;
+    let mut allocations_iter = storage.iter(allocations_query).await?;
 
     let mut total_in_vesting: u128 = 0;
     while let Some(Ok(kv)) = allocations_iter.next().await {
@@ -221,28 +231,32 @@ pub async fn get_circulating_supply() -> Result<u128, ServerFnError> {
 pub async fn get_balance_of(id: String) -> Result<Balances, ServerFnError> {
     let chain_api = get_chain_api().await?;
 
-    let query = substrate::allfeat::storage()
-        .system()
-        .account(AccountId32::from_str(&id).expect("Valid address"));
+    let account_id =
+        AccountId32::from_str(&id).map_err(|_| ServerFnError::new("Invalid address format"))?;
 
-    let account_info = chain_api
-        .storage()
-        .at_latest()
-        .await?
-        .fetch(&query)
-        .await?
-        .unwrap();
+    let query = substrate::allfeat::storage().system().account(account_id);
 
-    Ok(Balances {
-        free: account_info.data.free,
-        reserved: account_info.data.reserved,
-        frozen: account_info.data.frozen,
-    })
+    let account_info = chain_api.storage().at_latest().await?.fetch(&query).await?;
+
+    // Return zero balances if account doesn't exist on chain
+    match account_info {
+        Some(info) => Ok(Balances {
+            free: info.data.free,
+            reserved: info.data.reserved,
+            frozen: info.data.frozen,
+        }),
+        None => Ok(Balances {
+            free: 0,
+            reserved: 0,
+            frozen: 0,
+        }),
+    }
 }
 
 #[cfg(feature = "ssr")]
 mod ssr {
     pub use super::state::AppState;
+    pub use super::state::CachedData;
     pub use super::substrate::AllfeatClient;
     pub use super::substrate::allfeat::runtime_types::pallet_token_allocation::EnvelopeId;
     use super::*;
@@ -251,10 +265,27 @@ mod ssr {
     pub use subxt::SubstrateConfig;
     pub use subxt::utils::AccountId32;
 
+    /// Centralized envelope configuration - single source of truth
+    pub const ENVELOPES: &[(EnvelopeId, &str)] = &[
+        (EnvelopeId::Airdrop, "Airdrop"),
+        (EnvelopeId::CommunityRewards, "Community Rewards"),
+        (EnvelopeId::Private1, "Private Funding #1"),
+        (EnvelopeId::Private2, "Private Funding #2"),
+        (EnvelopeId::Public2, "Public Funding #2"),
+        (EnvelopeId::Public4, "Public Funding #4"),
+        (EnvelopeId::Public1, "Public Funding #1"),
+        (EnvelopeId::Public3, "Public Funding #3"),
+        (EnvelopeId::Teams, "Teams"),
+        (EnvelopeId::Reserve, "Reserve"),
+        (EnvelopeId::Listing, "Listing (CEX/DEX)"),
+        (EnvelopeId::ResearchDevelopment, "Research & Development"),
+        (EnvelopeId::KoL, "KoL Funding"),
+    ];
+
     /// Encode an AccountId32 to SS58 format with the Allfeat prefix (440)
     pub fn format_ss58(account: &AccountId32) -> String {
-        use blake2::{Blake2b512, Digest};
         use crate::utils::SS58_PREFIX;
+        use blake2::{Blake2b512, Digest};
 
         const SS58_PREFIX_BYTES: &[u8] = b"SS58PRE";
 
@@ -292,26 +323,17 @@ mod ssr {
         Ok(client.client)
     }
 
-    pub fn envelope_to_str(envelope: &EnvelopeId) -> &str {
-        match envelope {
-            EnvelopeId::Airdrop => "Airdrop",
-            EnvelopeId::CommunityRewards => "Community Rewards",
-            EnvelopeId::Private1 => "Private Funding #1",
-            EnvelopeId::Private2 => "Private Funding #2",
-            EnvelopeId::Seed => "Seed Funding",
-            EnvelopeId::SerieA => "Serie A Funding",
-            EnvelopeId::ICO1 => "ICO #1",
-            EnvelopeId::ICO2 => "ICO #2",
-            EnvelopeId::Founders => "Founders",
-            EnvelopeId::Reserve => "Reserve",
-            EnvelopeId::Exchanges => "Exchanges (CEX/DEX)",
-            EnvelopeId::ResearchDevelopment => "Research & Development",
-            EnvelopeId::KoL => "KoL Funding",
-        }
+    pub fn envelope_to_str(envelope: &EnvelopeId) -> &'static str {
+        ENVELOPES
+            .iter()
+            .find(|(id, _)| id == envelope)
+            .map(|(_, name)| *name)
+            .unwrap_or("Unknown")
     }
 
     pub async fn get_alloc_config_of(
         chain_api: &OnlineClient<SubstrateConfig>,
+        block_ref: &subxt::blocks::BlockRef<subxt::utils::H256>,
         envelope: &EnvelopeId,
         name: &str,
     ) -> Result<EnvelopeAllocation, ServerFnError> {
@@ -322,20 +344,15 @@ mod ssr {
             .token_allocation()
             .envelope_distributed(envelope.clone());
 
-        let res = chain_api
-            .storage()
-            .at_latest()
-            .await?
-            .fetch(&query)
-            .await?
-            .unwrap();
-        let res_distributed = chain_api
-            .storage()
-            .at_latest()
-            .await?
-            .fetch(&query_distributed)
-            .await?
-            .unwrap();
+        // Reuse the same block reference for both queries
+        let storage = chain_api.storage().at(block_ref.clone());
+
+        let (res, res_distributed) =
+            tokio::try_join!(storage.fetch(&query), storage.fetch(&query_distributed))?;
+
+        let res =
+            res.ok_or_else(|| ServerFnError::new(format!("Envelope config not found for {name}")))?;
+        let res_distributed = res_distributed.unwrap_or(0);
 
         Ok(EnvelopeAllocation {
             id: name.to_lowercase().to_string(),
