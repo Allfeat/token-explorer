@@ -1,7 +1,7 @@
 use crate::{
     components::toast::use_toast,
     pages::accounts::{allocations::AccountAllocations, balances::AccountBalances},
-    utils::{get_known_address_name, ss58_identicon_svg},
+    utils::{get_known_address_name, normalize_to_allfeat_ss58, ss58_identicon_svg},
 };
 use leptos::prelude::*;
 use leptos_router::hooks::use_params_map;
@@ -14,7 +14,10 @@ pub fn Account() -> impl IntoView {
     let toast = use_toast();
     let params = use_params_map();
 
-    let address = Memo::new(move |_| params.read().get("id").unwrap_or_default());
+    let address = Memo::new(move |_| {
+        let raw = params.read().get("id").unwrap_or_default();
+        normalize_to_allfeat_ss58(&raw).unwrap_or(raw)
+    });
 
     // Memoize the identicon SVG to avoid recalculating on every render
     let identicon_svg = Memo::new(move |_| ss58_identicon_svg(&address.get(), 64));

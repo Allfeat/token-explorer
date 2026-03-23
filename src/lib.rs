@@ -141,6 +141,11 @@ pub async fn get_epoch_duration() -> Result<u32, ServerFnError> {
 
 #[server]
 pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnError> {
+    use crate::utils::normalize_to_allfeat_ss58;
+
+    let normalized_id = normalize_to_allfeat_ss58(&id)
+        .ok_or_else(|| ServerFnError::new("Invalid address format"))?;
+
     let chain_api = get_chain_api().await?;
 
     let query = substrate::allfeat::storage()
@@ -156,7 +161,7 @@ pub async fn get_allocations_of(id: String) -> Result<Vec<Allocation>, ServerFnE
     let mut allocs: Vec<Allocation> = vec![];
 
     while let Some(Ok(kv)) = allocs_iter.next().await {
-        if format_ss58(&kv.value.beneficiary) == id {
+        if format_ss58(&kv.value.beneficiary) == normalized_id {
             allocs.push(Allocation {
                 envelope: get_alloc_config_of(
                     &chain_api,

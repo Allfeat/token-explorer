@@ -5,6 +5,59 @@ pub const TREASURY_ACCOUNT: &str = "qSwoJVKfgchSRjD6CZ739j9G7zR1khXqkvbeMVCN1NPK
 
 pub const SS58_PREFIX: u16 = 440;
 
+/// Decode any SS58 address (any prefix) and re-encode it with the Allfeat prefix (440).
+/// Returns None if the address is invalid.
+pub fn normalize_to_allfeat_ss58(address: &str) -> Option<String> {
+    use blake2::{Blake2b512, Digest};
+
+    const SS58_PRE: &[u8] = b"SS58PRE";
+
+    let decoded = bs58::decode(address).into_vec().ok()?;
+    if decoded.is_empty() {
+        return None;
+    }
+
+    // Determine prefix length: single-byte (<64) or two-byte
+    let prefix_len = if decoded[0] < 64 { 1usize } else { 2usize };
+
+    // Total length must be prefix + 32 (pubkey) + 2 (checksum)
+    if decoded.len() != prefix_len + 34 {
+        return None;
+    }
+
+    let public_key = &decoded[prefix_len..prefix_len + 32];
+
+    // Verify input checksum
+    let mut hasher = Blake2b512::new();
+    hasher.update(SS58_PRE);
+    hasher.update(&decoded[..prefix_len]);
+    hasher.update(public_key);
+    let hash = hasher.finalize();
+
+    if decoded[prefix_len + 32] != hash[0] || decoded[prefix_len + 33] != hash[1] {
+        return None;
+    }
+
+    // Re-encode with Allfeat prefix (440, two-byte encoding)
+    let allfeat_prefix = [
+        ((SS58_PREFIX & 0x00FC) as u8 >> 2) | 0x40,
+        ((SS58_PREFIX >> 8) as u8) | ((SS58_PREFIX & 0x0003) as u8) << 6,
+    ];
+
+    let mut hasher = Blake2b512::new();
+    hasher.update(SS58_PRE);
+    hasher.update(&allfeat_prefix);
+    hasher.update(public_key);
+    let hash = hasher.finalize();
+
+    let mut result = Vec::with_capacity(36);
+    result.extend_from_slice(&allfeat_prefix);
+    result.extend_from_slice(public_key);
+    result.extend_from_slice(&hash[0..2]);
+
+    Some(bs58::encode(result).into_string())
+}
+
 pub const SECS_PER_BLOCK: u64 = 6;
 
 pub const DAY: u64 = 86_400;
