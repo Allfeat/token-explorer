@@ -282,6 +282,47 @@ pub fn trim_trailing_zero(mut s: String) -> String {
     s
 }
 
+/// Faithful mirror of `pallet_token_allocation::Pallet::claimable_amount`.
+///
+/// Returns the amount that becomes releasable at block `at`, given an
+/// allocation's on-chain state. The cliff/start gate is the whole point:
+/// `effective_start = max(start, cliff)` and **nothing** is releasable while
+/// `at <= effective_start`. Without this gate the explorer projects a linear
+/// emission as if vesting had been streaming since block 0, which is why a
+/// pre-cliff envelope (e.g. Public2) wrongly showed a non-zero "next epoch".
+///
+/// `vested_total * elapsed` stays well within `u128` (vested_total ≤ total
+/// supply ≈ 1e21, elapsed ≤ vesting_duration ≈ 1e7 → product < 1e28 ≪ 3.4e38),
+/// so the runtime's U256 math is reproduced exactly with plain `u128` here.
+pub fn claimable_amount(
+    vested_total: u128,
+    released: u128,
+    start: u32,
+    cliff: u32,
+    vesting_duration: u32,
+    at: u32,
+) -> u128 {
+    let effective_start = start.max(cliff);
+
+    // Too early — cliff not reached.
+    if at <= effective_start {
+        return 0;
+    }
+
+    let elapsed = at.saturating_sub(effective_start);
+
+    // Fully vested (also covers vesting_duration == 0, matching the runtime).
+    if elapsed >= vesting_duration || vesting_duration == 0 {
+        return vested_total.saturating_sub(released);
+    }
+
+    // Partial linear vesting: floor(vested_total * elapsed / vesting_duration).
+    let vested_amount =
+        vested_total.saturating_mul(elapsed as u128) / vesting_duration as u128;
+
+    vested_amount.saturating_sub(released)
+}
+
 /// Converts block count into a human-readable duration string showing the two largest units.
 pub fn blocks_to_human_duration(blocks: u32) -> String {
     if blocks == 0 {

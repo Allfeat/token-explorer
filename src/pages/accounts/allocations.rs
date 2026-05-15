@@ -1,8 +1,8 @@
 use crate::{
-    Allocation,
+    Allocation, PayoutTiming,
     components::{Card, fetchable_balance::FetchableData},
-    get_allocations_of, get_epoch_duration,
-    utils::{blocks_to_human_duration, blocks_to_str, format_balance},
+    get_allocations_of, get_payout_timing,
+    utils::{blocks_to_human_duration, blocks_to_str, claimable_amount, format_balance},
 };
 use leptos::prelude::*;
 
@@ -56,12 +56,15 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
     let progress_pct = format!("{:.1}%", progress * 100.0);
     let bar_w = format!("width: {:.2}%;", (progress * 100.0));
 
-    let per_block = if env.vesting_duration == 0 {
-        0.0
-    } else {
-        vested_total as f64 / env.vesting_duration as f64
-    };
-    let epoch_blocks = OnceResource::new(get_epoch_duration());
+    // On-chain inputs for the faithful next-epoch projection. This mirrors
+    // the runtime's `claimable_amount` (cliff/start gate included) instead of
+    // assuming a linear emission since block 0 — the old `per_block` bug that
+    // showed releases before the cliff was ever reached.
+    let released_chain = allocation.released;
+    let start = allocation.start;
+    let cliff = env.cliff;
+    let vesting_duration = env.vesting_duration;
+    let timing = OnceResource::new(get_payout_timing());
 
     view! {
         <Card class="h-full flex flex-col">
@@ -114,17 +117,20 @@ fn AllocationItem(allocation: Allocation) -> impl IntoView {
                 </div>
 
                 // --- NEXT EPOCH PREDICTION ---
-                <FetchableData data=epoch_blocks render=move |n_blocks: u32| {
-                    let next_epoch: u128 = ((per_block * n_blocks as f64).floor()) as u128;
+                <FetchableData data=timing render=move |t: PayoutTiming| {
+                    let next_release = claimable_amount(
+                        vested_total, released_chain, start, cliff, vesting_duration, t.next_payout_at,
+                    );
+                    let eta_blocks = t.next_payout_at.saturating_sub(t.current_block);
                     view! {
                          <div class="mt-auto pt-2 sm:pt-4">
                             <div class="rounded bg-black/40 border border-white/5 p-3 flex items-center justify-between">
                                 <div class="flex flex-col">
                                     <span class="text-[10px] uppercase text-neutral-500">"Next Epoch Release"</span>
-                                    <span class="text-[10px] sm:text-xs text-neutral-600">"Estimated ~24h"</span>
+                                    <span class="text-[10px] sm:text-xs text-neutral-600">"in " {blocks_to_human_duration(eta_blocks)}</span>
                                 </div>
                                 <span class="text-sm font-mono font-bold text-emerald-400">
-                                    "+"{ format_balance(next_epoch, true) }
+                                    "+"{ format_balance(next_release, true) }
                                 </span>
                             </div>
                         </div>

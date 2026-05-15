@@ -56,6 +56,15 @@ pub struct Allocation {
     pub start: u32,
 }
 
+/// Timing context needed to project the next epoch payout faithfully.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PayoutTiming {
+    /// Latest finalized block — the chain's notion of "now".
+    pub current_block: u32,
+    /// Block at which the next epoch payout will actually run on-chain.
+    pub next_payout_at: u32,
+}
+
 #[server(output = StreamingText)]
 pub async fn get_block_number_stream() -> Result<TextStream, ServerFnError> {
     use futures::StreamExt;
@@ -137,6 +146,43 @@ pub async fn get_epoch_duration() -> Result<u32, ServerFnError> {
         .epoch_duration();
 
     Ok(chain_api.constants().at(&query)?)
+}
+
+/// Returns the current block and the block at which the next epoch payout
+/// runs. The next-payout block is read from the chain's `NextPayoutAt`
+/// schedule when it is still in the future; otherwise (uninitialized, or a
+/// tick firing now/overdue) we project one epoch ahead so the figure
+/// reflects the *upcoming* payout rather than the one already executing.
+#[server]
+pub async fn get_payout_timing() -> Result<PayoutTiming, ServerFnError> {
+    let chain_api = get_chain_api().await?;
+
+    let block = chain_api.blocks().at_latest().await?;
+    let now = block.header().number;
+
+    let epoch_query = substrate::allfeat::constants()
+        .token_allocation()
+        .epoch_duration();
+    let epoch: u32 = chain_api.constants().at(&epoch_query)?;
+
+    let next_query = substrate::allfeat::storage()
+        .token_allocation()
+        .next_payout_at();
+    let scheduled = chain_api
+        .storage()
+        .at(block.reference())
+        .fetch(&next_query)
+        .await?;
+
+    let next_payout_at = match scheduled {
+        Some(n) if n > now => n,
+        _ => now.saturating_add(epoch),
+    };
+
+    Ok(PayoutTiming {
+        current_block: now,
+        next_payout_at,
+    })
 }
 
 #[server]
